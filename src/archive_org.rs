@@ -255,7 +255,9 @@ mod tests {
             "https://creativecommons.org/licenses/by-nc-nd/4.0/"
         ));
         assert!(!is_allowed_license(""));
-        assert!(!is_allowed_license("https://example.com/all-rights-reserved"));
+        assert!(!is_allowed_license(
+            "https://example.com/all-rights-reserved"
+        ));
     }
 
     #[test]
@@ -280,8 +282,14 @@ mod tests {
         let parsed: SearchResponse = serde_json::from_str(json).unwrap();
         assert_eq!(parsed.response.docs.len(), 3);
         assert_eq!(parsed.response.docs[0].identifier, "good-song");
-        assert!(is_allowed_license(&parsed.response.docs[0].licenseurl.first()));
-        assert!(!is_allowed_license(&parsed.response.docs[1].licenseurl.first()));
-        assert!(!is_allowed_license(&parsed.response.docs[2].licenseurl.first()));
+        assert!(is_allowed_license(
+            &parsed.response.docs[0].licenseurl.first()
+        ));
+        assert!(!is_allowed_license(
+            &parsed.response.docs[1].licenseurl.first()
+        ));
+        assert!(!is_allowed_license(
+            &parsed.response.docs[2].licenseurl.first()
+        ));
     }
 }

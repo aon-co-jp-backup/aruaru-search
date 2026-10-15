@@ -453,7 +453,12 @@ async fn bump_give_up_streak(s: &Searcher, dir: &Path, id: &str) -> (u32, bool) 
         },
         Err(_) => 0,
     };
-    persist_engines(s, dir, &format!("aruaru-search give_up {id} (streak {streak})")).await;
+    persist_engines(
+        s,
+        dir,
+        &format!("aruaru-search give_up {id} (streak {streak})"),
+    )
+    .await;
     if disabled_now {
         record(
             s,
@@ -493,7 +498,10 @@ async fn recheck_disabled(s: &Searcher, dir: &Path, def: &EngineDef) -> String {
                 "無効化していましたが、見本の検索で再度結果を読み取れたため自動的に有効化しました",
             )
             .await;
-            format!("{}: 無効化中だったが復活を確認 → 自動的に再度有効化", def.id)
+            format!(
+                "{}: 無効化中だったが復活を確認 → 自動的に再度有効化",
+                def.id
+            )
         }
         _ => format!("{}: 無効化中(まだ復活を確認できません)", def.id),
     }
@@ -744,19 +752,28 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("aruaru-search-test-gu-{}", now_unix()));
         let s = Searcher::new(engine::defaults()).unwrap();
         let id = "bing";
-        assert!(s.engine(id).unwrap().enabled, "前提: 既定で有効な検索元を使う");
+        assert!(
+            s.engine(id).unwrap().enabled,
+            "前提: 既定で有効な検索元を使う"
+        );
         // DISABLE_AFTER_GIVE_UPS 回未満なら、まだ有効なまま
         for n in 1..DISABLE_AFTER_GIVE_UPS {
             let (streak, disabled_now) = bump_give_up_streak(&s, &dir, id).await;
             assert_eq!(streak, n);
             assert!(!disabled_now);
-            assert!(s.engine(id).unwrap().enabled, "しきい値未満では無効化しない");
+            assert!(
+                s.engine(id).unwrap().enabled,
+                "しきい値未満では無効化しない"
+            );
         }
         // ちょうどしきい値に達したら、無効化される
         let (streak, disabled_now) = bump_give_up_streak(&s, &dir, id).await;
         assert_eq!(streak, DISABLE_AFTER_GIVE_UPS);
         assert!(disabled_now);
-        assert!(!s.engine(id).unwrap().enabled, "しきい値に達したら無効化する");
+        assert!(
+            !s.engine(id).unwrap().enabled,
+            "しきい値に達したら無効化する"
+        );
         // 保存先にも反映されている
         assert!(
             !load_engines(&dir)

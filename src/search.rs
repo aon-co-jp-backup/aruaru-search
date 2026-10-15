@@ -243,6 +243,20 @@ impl Searcher {
         let (hits, err, sample) = match result {
             Ok(html) => {
                 let mut hits = engine::parse(def, &html);
+                // 「人かどうかの確認」画面は、ページの作りの変化ではなく拒否。確認の突破は行わず、休ませる
+                if hits.is_empty() && is_challenge_page(&html) {
+                    self.block(def, "人かどうかの確認画面", 4);
+                    let e = "人かどうかの確認画面が返されました(機械利用を制限されています。確認の突破は行わず、休みます)".to_string();
+                    if let Ok(mut st) = self.status.write() {
+                        let s = st.entry(def.id.clone()).or_default();
+                        s.last_checked_unix = now_unix();
+                        s.last_hits = 0;
+                        s.last_ok = Some(false);
+                        s.consecutive_failures += 1;
+                        s.last_error = Some(e.clone());
+                    }
+                    bail!("{}: {e}", def.name);
+                }
                 let mut err = hits.is_empty().then(|| {
                     "結果を1件も読み取れませんでした(ページの作りが変わった可能性)".to_string()
                 });
@@ -435,6 +449,26 @@ pub fn jitter(d: Duration) -> Duration {
         .map_or(0, |t| t.subsec_nanos());
     let permille = 800 + u64::from(n % 800); // 800..1599
     Duration::from_millis(d.as_millis() as u64 * permille / 1000)
+}
+
+/// 検索元が返す「人かどうかの確認」画面(CAPTCHA・安全確認)か。短いページで、題名か本文にその語がある。
+pub fn is_challenge_page(html: &str) -> bool {
+    if html.len() > 20_000 {
+        return false;
+    }
+    let l = html.to_lowercase();
+    [
+        "百度安全验证",
+        "安全验证",
+        "captcha",
+        "unusual traffic",
+        "are you a robot",
+        "verify you are human",
+        "アクセスが集中",
+        "ロボットではありません",
+    ]
+    .iter()
+    .any(|k| l.contains(&k.to_lowercase()))
 }
 
 /// 検索語の切り出し(空白区切り。1文字の語・記号だけの語は除く)
@@ -676,6 +710,22 @@ mod tests {
             let d = jitter(Duration::from_millis(1000));
             assert!((800..1600).contains(&(d.as_millis() as u64)), "{d:?}");
         }
+    }
+
+    #[test]
+    fn challenge_pages_are_detected_but_real_results_are_not() {
+        assert!(is_challenge_page(
+            "<html><head><title>百度安全验证</title></head><body>请完成验证</body></html>"
+        ));
+        assert!(is_challenge_page("<title>Please verify</title> CAPTCHA"));
+        let big = format!("<html>{}captcha</html>", "x".repeat(30_000));
+        assert!(
+            !is_challenge_page(&big),
+            "大きな結果ページは確認画面ではない"
+        );
+        assert!(!is_challenge_page(
+            "<html><title>北京 温泉_百度搜索</title></html>"
+        ));
     }
 
     #[test]
