@@ -14,6 +14,7 @@ use serde::Serialize;
 use crate::engine::{self, EngineDef, Hit};
 use crate::lang::{self, Lang};
 
+const API_UA: &str = "aruaru-search/1.0 (+https://github.com/aon-co-jp/aruaru-search)";
 const UA: &str = "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0";
 const MIN_INTERVAL: Duration = Duration::from_millis(1200);
 const CACHE_TTL: Duration = Duration::from_secs(3600);
@@ -201,17 +202,22 @@ impl Searcher {
             MIN_INTERVAL
         };
         self.polite_wait(&def.id, interval).await;
-        let resp = self
+        let mut req = self
             .http
             .get(def.search_url(q, hl, gl))
-            .header("Accept-Language", if hl.is_empty() { "en" } else { hl })
-            .header("Accept", "text/html,application/xhtml+xml")
-            .send()
-            .await?;
+            .header("Accept-Language", if hl.is_empty() { "en" } else { hl });
+        req = if def.is_api() {
+            // 公式 API は、連絡先の分かる名乗りを求められる(Wikimedia のポリシー等)ので、ブラウザを装わない
+            req.header("User-Agent", API_UA).header("Accept", "application/json")
+        } else {
+            req.header("Accept", "text/html,application/xhtml+xml")
+        };
+        let resp = req.send().await?;
         let status = resp.status();
         // 202 は検索元の「機械による利用の確認」(bot 対策)のページ。結果ではないので、ページの作りの変化とは区別する
         if !status.is_success() || status.as_u16() == 202 {
-            if matches!(status.as_u16(), 202 | 403 | 429 | 503) {
+            // API は、無料枠の超過を 400(Stack Exchange)で返すことがある。続けて呼ばず、長めに休む
+            if matches!(status.as_u16(), 202 | 403 | 429 | 503) || (def.is_api() && status.as_u16() == 400) {
                 self.block(def, &format!("HTTP {}", status.as_u16()), 4);
             }
             bail!(
@@ -244,7 +250,7 @@ impl Searcher {
             Ok(html) => {
                 let mut hits = engine::parse(def, &html);
                 // 「人かどうかの確認」画面は、ページの作りの変化ではなく拒否。確認の突破は行わず、休ませる
-                if hits.is_empty() && is_challenge_page(&html) {
+                if !def.is_api() && hits.is_empty() && is_challenge_page(&html) {
                     self.block(def, "人かどうかの確認画面", 4);
                     let e = "人かどうかの確認画面が返されました(機械利用を制限されています。確認の突破は行わず、休みます)".to_string();
                     if let Ok(mut st) = self.status.write() {
@@ -262,7 +268,7 @@ impl Searcher {
                 });
                 // 検索語の一部(先頭だけ・末尾だけ)しか反映されない結果は、機械利用を疑われて機能を落とされた
                 // 応答(いわゆる「ソフトブロック」)。誤った結果を返さず、その検索元を休ませる。
-                if err.is_none() && !covers_query(q, &hits) {
+                if err.is_none() && !def.is_api() && !covers_query(q, &hits) {
                     // 拒否より軽い制限なので、休むのは最長3時間(段階2)まで
                     self.block(def, "検索語の一部しか反映されない結果", 2);
                     hits.clear();

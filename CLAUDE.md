@@ -132,3 +132,27 @@ Reading into `serde_json::Value` gives almost no speed-up even with SIMD (188 ms
 **Adoption**: in `Cargo.toml`, `rust-json = { path = "../RS-JSON", features = ["fast"] }`. Example in `RS-JSON/README.md`.
 
 **Status in this repository**: Not yet applied (policy only). Code will be switched over place by place, starting where measurements show large or frequent JSON reads.
+
+## 英語の検索元の追加(2026-10-16)
+
+**背景**: VPS の IP から Bing・Brave が拒否されて休止すると、英語の検索は残りの検索元(日本語・韓国語・中国語向け)が
+全て対象外のため、結果が0件(502)になっていた(aruaru-llm の共有 AI 経路で実測)。ユーザー指示で英語向けの検索元を追加した。
+
+**HTML の検索結果ページを読む英語の検索元は、方針(`robots.txt` で禁止されていない・ボット検知されない)に合うものが無かった**
+(2026-10-16 に VPS から実測。次に同じ道を通らないための記録):
+- **Mojeek** — `robots.txt` が `/search` を禁止、実ページも HTTP 403(正規の用途は有料 API)。
+- **Yahoo! 全世界版**(search.yahoo.com) — `robots.txt` が `/search` を禁止。
+- **Marginalia** — `robots.txt` が `/search` を禁止(移転先 marginalia-search.com も同じ)。
+- **Yep** — HTTP 403。**DuckDuckGo Lite**・**Dogpile** — HTTP 202(人かどうかの確認)で結果が出ない。
+- **Ask.com**・**AOL 検索** — サービス終了(GitHub Pages の404ページ・404)。
+
+**そこで、プログラムからの利用が公式に認められた無料の公開 API(JSON)を検索元にした**(`EngineDef.kind`):
+- `wikipedia` — MediaWiki API。**検索語の言語のサブドメイン**(`{lang}.wikipedia.org`、`{lang}` は `hl` の基本コード)を使うので、
+  約130言語の検索にそのまま使える。
+- `hn` — Hacker News の Algolia API(英語のみ)。
+- `stackoverflow` — Stack Exchange API の `/search/excerpts`(英語のみ。キー無しは1日300回までのため間隔3秒、
+  超過時の HTTP 400 は長めに休む)。
+- API の検索元は **セレクタ・AI による自動修復・「検索語の一部しか反映されない」判定の対象外**(`canaries_for` が空)。
+  `User-Agent` はブラウザを装わず `aruaru-search/1.0 (+リポジトリURL)` と名乗る(Wikimedia のポリシー)。
+- **限界(正直な開示)**: これらは百科事典・プログラミングの Q&A・技術ニュースに強いが、一般のウェブ全体の最新情報
+  (例: 製品の最新バージョン)は Bing・Brave に頼る。両方が休止中なら、一般の話題は0件になりうる。

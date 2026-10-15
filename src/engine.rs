@@ -48,7 +48,16 @@ pub struct EngineDef {
     /// に達すると自動で無効化する(`maintain::selfcheck`)。直せた・正常だった時点で 0 に戻る。
     #[serde(default)]
     pub give_up_streak: u32,
+    /// 検索元の種類。空(または `html`)なら、公開の検索結果ページ(HTML)をセレクタで読む。
+    /// `wikipedia`・`hn`・`stackoverflow` は、**プログラムからの利用が公式に認められた無料の公開 API**
+    /// (JSON)を読む(セレクタ・自動修復の対象外)。HTML の検索結果ページが `robots.txt` で禁止されている・
+    /// ボット検知される英語圏の検索元の代わりに、英語の検索を安定させるために使う
+    #[serde(default)]
+    pub kind: String,
 }
+
+/// 公式の公開 API として扱う種類
+const API_KINDS: [&str; 3] = ["wikipedia", "hn", "stackoverflow"];
 
 fn one() -> f64 {
     1.0
@@ -97,12 +106,18 @@ impl EngineDef {
             .url
             .replace("{q}", &encode(q))
             .replace("{hl}", &encode(hl))
+            .replace("{lang}", &encode(&base.to_ascii_lowercase()))
             .replace("{gl}", &encode(gl))
             .replace("{kl}", &encode(&kl));
         // 地域が分からないときは、地域の指定そのものを付けない
         url.replace("&cc=&", "&")
             .trim_end_matches("&cc=")
             .to_string()
+    }
+
+    /// 公式の公開 API(JSON)を読む検索元か。
+    pub fn is_api(&self) -> bool {
+        API_KINDS.contains(&self.kind.as_str())
     }
 
     /// この検索元を、この言語の検索に使うか。
@@ -131,6 +146,16 @@ impl EngineDef {
             .map_err(|e| anyhow!("URL の型が正しくありません: {e}"))?;
         if u.scheme() != "https" {
             bail!("URL は https のみです");
+        }
+        if !self.kind.is_empty() && self.kind != "html" && !self.is_api() {
+            bail!("kind が正しくありません");
+        }
+        if self.is_api() {
+            // API の検索元は、セレクタを使わない
+            if !(0.0..=2.0).contains(&self.weight) {
+                bail!("weight は 0〜2 です");
+            }
+            return Ok(());
         }
         for (name, sel) in [
             ("container", &self.container),
@@ -224,8 +249,113 @@ fn text_of(e: scraper::ElementRef<'_>) -> String {
         .join(" ")
 }
 
+/// HTML のタグを取り除き、基本的な文字参照を戻した文字列にする(API の要約・題名用)。
+fn strip_html(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut in_tag = false;
+    for c in s.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' if in_tag => in_tag = false,
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    out.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&#x27;", "'")
+        .replace("&nbsp;", " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn json_str<'a>(v: &'a serde_json::Value, key: &str) -> &'a str {
+    v.get(key).and_then(|x| x.as_str()).unwrap_or("")
+}
+
+/// 公式の公開 API(JSON)の応答から、検索結果を取り出す。形が想定と違えば空(=「読み取れず」)にする。
+fn parse_api(kind: &str, body: &str) -> Vec<Hit> {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(body) else {
+        return Vec::new();
+    };
+    let mut out: Vec<Hit> = Vec::new();
+    match kind {
+        // MediaWiki API(generator=search + prop=info|extracts)。pages は pageid をキーにした連想配列で、
+        // 並びは各ページの index(検索の順位)で決める
+        "wikipedia" => {
+            let Some(pages) = v.pointer("/query/pages").and_then(|p| p.as_object()) else {
+                return out;
+            };
+            let mut items: Vec<(&serde_json::Value, i64)> = pages
+                .values()
+                .map(|p| (p, p.get("index").and_then(|i| i.as_i64()).unwrap_or(i64::MAX)))
+                .collect();
+            items.sort_by_key(|(_, i)| *i);
+            for (p, _) in items {
+                let (title, link) = (json_str(p, "title"), json_str(p, "fullurl"));
+                if title.is_empty() || !link.starts_with("https://") {
+                    continue;
+                }
+                out.push(Hit {
+                    title: title.to_string(),
+                    link: link.to_string(),
+                    snippet: strip_html(json_str(p, "extract")),
+                });
+            }
+        }
+        // Hacker News の Algolia API
+        "hn" => {
+            for h in v.get("hits").and_then(|h| h.as_array()).into_iter().flatten() {
+                let title = json_str(h, "title");
+                let id = json_str(h, "objectID");
+                if title.is_empty() || id.is_empty() {
+                    continue;
+                }
+                let link = match json_str(h, "url") {
+                    u if u.starts_with("https://") || u.starts_with("http://") => u.to_string(),
+                    _ => format!("https://news.ycombinator.com/item?id={id}"),
+                };
+                let points = h.get("points").and_then(|x| x.as_i64()).unwrap_or(0);
+                let comments = h.get("num_comments").and_then(|x| x.as_i64()).unwrap_or(0);
+                let date: String = json_str(h, "created_at").chars().take(10).collect();
+                out.push(Hit {
+                    title: strip_html(title),
+                    link,
+                    snippet: format!("Hacker News · {points} points · {comments} comments · {date}"),
+                });
+            }
+        }
+        // Stack Exchange API の /search/excerpts(Stack Overflow)
+        "stackoverflow" => {
+            for it in v.get("items").and_then(|h| h.as_array()).into_iter().flatten() {
+                let title = strip_html(json_str(it, "title"));
+                let Some(qid) = it.get("question_id").and_then(|x| x.as_i64()) else {
+                    continue;
+                };
+                if title.is_empty() {
+                    continue;
+                }
+                out.push(Hit {
+                    title,
+                    link: format!("https://stackoverflow.com/questions/{qid}"),
+                    snippet: strip_html(json_str(it, "excerpt")),
+                });
+            }
+        }
+        _ => {}
+    }
+    out
+}
+
 /// 結果ページの HTML から、検索結果を取り出す。広告(検索元の宣伝リンク)は除く。
 pub fn parse(def: &EngineDef, html: &str) -> Vec<Hit> {
+    if def.is_api() {
+        return parse_api(&def.kind, html);
+    }
     let snip = Selector::parse(&def.snippet).ok();
     let (Ok(cont), Ok(title), Ok(link)) = (
         Selector::parse(&def.container),
@@ -287,6 +417,55 @@ pub fn parse(def: &EngineDef, html: &str) -> Vec<Hit> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn api_def(id: &str) -> EngineDef {
+        defaults().into_iter().find(|e| e.id == id).unwrap()
+    }
+
+    #[test]
+    fn api_engines_are_valid_and_use_the_query_language_subdomain() {
+        for id in ["wikipedia", "hackernews", "stackoverflow"] {
+            let d = api_def(id);
+            assert!(d.is_api(), "{id}");
+            d.validate().unwrap_or_else(|e| panic!("{id}: {e}"));
+        }
+        let u = api_def("wikipedia").search_url("Rust 言語", "ja", "JP");
+        assert!(u.starts_with("https://ja.wikipedia.org/w/api.php?"), "{u}");
+        assert!(u.contains("gsrsearch=Rust+%E8%A8%80%E8%AA%9E"), "{u}");
+        let tw = api_def("wikipedia").search_url("x", "zh-TW", "TW");
+        assert!(tw.starts_with("https://zh.wikipedia.org/"), "{tw}");
+    }
+
+    #[test]
+    fn wikipedia_api_results_keep_search_rank_order() {
+        let body = r#"{"query":{"pages":{"2":{"title":"B","index":2,"fullurl":"https://en.wikipedia.org/wiki/B","extract":"about <b>b</b>"},"1":{"title":"A","index":1,"fullurl":"https://en.wikipedia.org/wiki/A","extract":"about a"}}}}"#;
+        let hits = parse(&api_def("wikipedia"), body);
+        assert_eq!(hits.iter().map(|h| h.title.as_str()).collect::<Vec<_>>(), ["A", "B"]);
+        assert_eq!(hits[1].snippet, "about b");
+    }
+
+    #[test]
+    fn hacker_news_and_stack_overflow_results_are_read() {
+        let hn = r#"{"hits":[{"title":"Rust 1.99 released","url":"https://blog.rust-lang.org/x","objectID":"1","points":300,"num_comments":42,"created_at":"2026-10-02T10:00:00Z"},{"title":"Ask HN: Rust?","url":null,"objectID":"2","points":5,"num_comments":1,"created_at":"2026-10-03T10:00:00Z"}]}"#;
+        let h = parse(&api_def("hackernews"), hn);
+        assert_eq!(h.len(), 2);
+        assert_eq!(h[0].link, "https://blog.rust-lang.org/x");
+        assert_eq!(h[1].link, "https://news.ycombinator.com/item?id=2");
+        assert!(h[0].snippet.contains("300 points") && h[0].snippet.contains("2026-10-02"));
+        let so = r#"{"items":[{"item_type":"question","question_id":123,"title":"How to use &quot;Rust&quot; traits?","excerpt":"use <span class=\"highlight\">traits</span> like this"}]}"#;
+        let s = parse(&api_def("stackoverflow"), so);
+        assert_eq!(s[0].link, "https://stackoverflow.com/questions/123");
+        assert_eq!(s[0].title, "How to use \"Rust\" traits?");
+        assert_eq!(s[0].snippet, "use traits like this");
+    }
+
+    #[test]
+    fn malformed_api_bodies_yield_no_hits() {
+        for id in ["wikipedia", "hackernews", "stackoverflow"] {
+            assert!(parse(&api_def(id), "<html>blocked</html>").is_empty());
+            assert!(parse(&api_def(id), "{}").is_empty());
+        }
+    }
 
     fn ddg() -> EngineDef {
         defaults()

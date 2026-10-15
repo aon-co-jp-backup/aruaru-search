@@ -41,6 +41,10 @@ pub const CANARIES: &[(&str, &str, &str)] = &[
 /// この検索元の点検に使う見本の検索。得意な言語が決まっている検索元(日本向け・韓国向け・中国向け)は、その言語で。
 /// 全言語向けの検索元は、英語と日本語で。
 pub fn canaries_for(def: &EngineDef) -> Vec<(&'static str, &'static str, &'static str)> {
+    // 公式 API の検索元は、セレクタ(=自動修復の対象)を持たないので、点検・修復の対象外
+    if def.is_api() {
+        return Vec::new();
+    }
     CANARIES
         .iter()
         .copied()
