@@ -61,7 +61,7 @@ impl Store {
         let Some(bytes) = got.into_iter().next().and_then(|(_, b)| b) else {
             return Ok(Vec::new());
         };
-        let v: Vec<EngineDef> = serde_json::from_slice(&bytes).unwrap_or_default();
+        let v: Vec<EngineDef> = sonic_rs::from_slice(&bytes).unwrap_or_default();
         Ok(v.into_iter().filter(|e| e.validate().is_ok()).collect())
     }
 
