@@ -168,7 +168,7 @@ pub fn prompt(def: &EngineDef, query: &str, structure: &str) -> String {
 fn extract_json(text: &str) -> Option<Json> {
     let start = text.find('{')?;
     let end = text.rfind('}')?;
-    serde_json::from_str(&text[start..=end]).ok()
+    sonic_rs::from_str(&text[start..=end]).ok()
 }
 
 /// AI の提案を、今の設定に重ねた候補にする(変えてよい項目だけ)。
@@ -283,7 +283,7 @@ pub fn merge_defaults(saved: Vec<EngineDef>) -> Vec<EngineDef> {
 pub fn load_engines(dir: &Path) -> Vec<EngineDef> {
     let saved: Option<Vec<EngineDef>> = std::fs::read(dir.join("engines.json"))
         .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok());
+        .and_then(|b| sonic_rs::from_slice(&b).ok());
     match saved {
         Some(v) if !v.is_empty() && v.iter().all(|e| e.validate().is_ok()) => merge_defaults(v),
         _ => engine::defaults(),

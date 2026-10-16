@@ -279,7 +279,7 @@ mod tests {
             { "identifier": "no-license" }
           ] }
         }"#;
-        let parsed: SearchResponse = serde_json::from_str(json).unwrap();
+        let parsed: SearchResponse = sonic_rs::from_str(json).unwrap();
         assert_eq!(parsed.response.docs.len(), 3);
         assert_eq!(parsed.response.docs[0].identifier, "good-song");
         assert!(is_allowed_license(

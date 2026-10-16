@@ -74,7 +74,7 @@ pub struct Hit {
 }
 
 pub fn defaults() -> Vec<EngineDef> {
-    serde_json::from_str(include_str!("../engines.default.json"))
+    sonic_rs::from_str(include_str!("../engines.default.json"))
         .expect("既定の検索元の設定は正しい")
 }
 
