@@ -1860,6 +1860,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "sonic-rs",
 ]
 
 [[package]]
@@ -1870,6 +1871,7 @@ dependencies = [
  "chrono",
  "open-runo-core",
  "serde",
+ "sonic-rs",
 ]
 
 [[package]]
@@ -1939,6 +1941,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "open-runo-openapi"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde_json",
+]
+
+[[package]]
 name = "open-runo-persisted-queries"
 version = "0.1.0"
 dependencies = [
@@ -1949,6 +1959,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "sonic-rs",
 ]
 
 [[package]]
@@ -1959,6 +1970,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "open-runo-openapi",
  "open-runo-router",
  "serde",
  "serde_json",
@@ -1976,6 +1988,7 @@ dependencies = [
  "flate2",
  "futures",
  "hex",
+ "hmac",
  "http-body-util",
  "hyper",
  "hyper-util",
@@ -1990,6 +2003,7 @@ dependencies = [
  "open-runo-federation",
  "open-runo-history",
  "open-runo-observability",
+ "open-runo-openapi",
  "open-runo-persisted-queries",
  "open-runo-schema-registry",
  "open-runo-scim",
@@ -2002,6 +2016,7 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2",
+ "sonic-rs",
  "tokio",
  "tracing",
  "uuid",
@@ -2034,6 +2049,7 @@ dependencies = [
  "open-runo-db",
  "serde",
  "serde_json",
+ "sonic-rs",
  "uuid",
 ]
 
@@ -2047,6 +2063,7 @@ dependencies = [
  "open-runo-core",
  "serde",
  "serde_json",
+ "sonic-rs",
 ]
 
 [[package]]

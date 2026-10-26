@@ -251,6 +251,7 @@ fn app(ctx: Arc<Ctx>) -> Route {
                 }
             })),
         )
+        .docs_auto("/api", "aruaru-search", env!("CARGO_PKG_VERSION"))
         .with_compression()
 }
 
