@@ -1,7 +1,7 @@
 # aruaru-search が依存する aon-co-jp の兄弟リポジトリ(コミット固定)。
 # 名前 URL コミット
-RPoem           https://github.com/aon-co-jp/RPoem.git           e5be68d1675e0d7c3316044b20d54746f7e71bf8
-open-web-server https://github.com/aon-co-jp/open-web-server.git 9081beed497c102610705aa1d885f6443f93289a
-open-raid-z     https://github.com/aon-co-jp/open-raid-z.git     422a03e043a9582dd3fd124e0b76a97e70b82af9
-RS-SmartTCP     https://github.com/aon-co-jp/RS-SmartTCP.git     16caba7781b943ee67c0db1da476ba034dc5994a
-open-cpu        https://github.com/aon-co-jp/open-cpu.git        d67cd245ae4664eba45b6824ea1ed1650efdf173
+RPoem           https://github.com/aon-co-jp/RPoem.git           e8e1c6fb114e13b96b8f52d1b52e8e6ed1e163c6
+open-web-server https://github.com/aon-co-jp/open-web-server.git 759e625745c43fc35382a99b9ebadfc7b53ca71d
+open-raid-z     https://github.com/aon-co-jp/open-raid-z.git     3ebe82ca6c51579019f77625d686a84aa58917a0
+RS-SmartTCP     https://github.com/aon-co-jp/RS-SmartTCP.git     e60612e64a57f4e870ca0e8aa56f13485858d7c7
+open-cpu        https://github.com/aon-co-jp/open-cpu.git        1ac7b45a635d105dd7177c7f14e1db6f91966eb3
