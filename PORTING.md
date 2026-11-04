@@ -42,3 +42,6 @@
 - Added `src/connect.rs` (Connect unary API); removed `/v1/health`, `/v1/engines`, `/admin/selfcheck`; `/v1/search` and `/v1/media-search` stay as time-limited compat until the three callers migrate. UI now calls Connect.
 - **デプロイ注意**: VPS 反映で `/v1/health` 等を叩く監視があれば `Search/Health` へ。
 - 追記(同日): 呼び出し側3つ(aruaru-llm / open-english / open-upstream-watch)をConnectへ移し、`/v1/search`・`/v1/media-search`も削除。**デプロイ順: 先にaruaru-search、その後に呼び出し側**。
+
+- 追記(2026-11-05): **VPS 反映済み**(`38d6e3a`)。呼び出し元の洗い出しの結果、未移行だった realdata.pro(`schema.rs` の `/v1/health` → `Search/Health`)と `audiocafe-tokyo-rust` の `diet_crawl.py`(`/v1/search` → `Search/Search`)も Connect(POST、RS-JSON)へ。aruaru-llm への呼び出しは `Llm/Rerank`・`Llm/ChatProvidersCompletePriority`。外部から来る JSON(archive.org・検索元API・aruaru-llm の応答)は `from_str_secure` で読む。
+- Added (2026-11-05): deployed to the VPS (`38d6e3a`); remaining callers (realdata.pro health, diet_crawl.py) moved to Connect (POST, RS-JSON); external JSON is read with `from_str_secure`.

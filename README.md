@@ -53,7 +53,7 @@ API は **Connect の単純呼び出し**(`POST /aruaru_search.v1.<Service>/<Met
 - **検索元のブロックの見張り**: 拒否(429・403・503・確認ページ)されたら休み、続くほど長く休む(20分 → 1時間 → 3時間 → 12時間 → 24時間)。
   成功すれば最初に戻る。状態は `Search/Health` と `Search/Engines` で見られ、拒否はログに出る。
 
-## 曲名/演奏者/作曲者の横断検索(archive.org、`/v1/media-search`)
+## 曲名/演奏者/作曲者の横断検索(archive.org、Connect `Search/MediaSearch`)
 
 既存の検索元(Bing・Brave など)は「公開の検索結果ページを HTML として解析する」設計だが、
 archive.org は構造化された JSON の検索 API(`advancedsearch.php`)とメタデータ API を持つため、
@@ -69,7 +69,7 @@ archive.org は構造化された JSON の検索 API(`advancedsearch.php`)とメ
 - 上位の結果だけ、メタデータ API(`metadata/<identifier>`)からファイル一覧を取得し、
   再生可能な音声ファイル(mp3 → Ogg Vorbis → FLAC の順で優先)の直接ダウンロード URL を
   `stream_url` として埋める(全件で行うと重いため上位のみ)。
-- 実機確認例: `curl 'http://127.0.0.1:4610/v1/media-search?q=Caruso&n=5'` で、
+- 実機確認例: `curl -XPOST -H 'content-type: application/json' -d '{"q":"Caruso","n":5}' http://127.0.0.1:4610/aruaru_search.v1.Search/MediaSearch`(Connect、POST、RS-JSON) で、
   Enrico Caruso のパブリックドメイン録音(1908〜1919年、`publicdomain/mark`)が
   ストリーミング URL 付きで返ることを確認済み(2026-09-27)。
 
