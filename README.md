@@ -25,17 +25,21 @@ Google 検索 API の無料枠(1日100件)に頼らず、複数の検索元(Bing
 ```bash
 bash scripts/fetch-deps.sh          # deps.lock どおりに RPoem 等を .deps/ へ取得
 cargo run --release                 # 127.0.0.1:4610 で待受
-curl 'http://127.0.0.1:4610/v1/search?q=%E5%B1%B1%E6%A2%A8%E7%9C%8C+%E6%B8%A9%E6%B3%89&hl=ja&n=10'
+curl -X POST -H "content-type: application/json" -d '{"q":"山梨県 温泉","hl":"ja","n":10}' http://127.0.0.1:4610/aruaru_search.v1.Search/Search
 ```
 
-| API | 内容 |
+API は **Connect の単純呼び出し**(`POST /aruaru_search.v1.<Service>/<Method>`、`content-type: application/json`、本文は JSON、エラーは `{"code","message"}`)。2026-11-04に REST から移行した。
+
+| メソッド | 内容 |
 |---|---|
-| `GET /v1/search?q=&hl=&gl=&n=` / `POST /v1/search` | 検索。`hl` は言語(ja, zh-TW, ar, fa …)、`gl` は地域(省略可)。`{"results":[{title,link,snippet,engines,score}],"warnings":[]}` |
-| `GET /v1/engines` | 検索元の設定と最近の状態 |
-| `POST /admin/selfcheck` | 点検と自動保守を今すぐ実行(`x-admin-token`。`ARUARU_SEARCH_ADMIN_TOKEN` 設定時のみ) |
-| `GET /v1/health` | 使える検索元の数と、休止中の検索元(`ok` / `degraded`(使える検索元が1つ) / `down`(0))|
-| `GET /v1/media-search?q=&n=` | [archive.org](https://archive.org)(Internet Archive)を曲名/演奏者/作曲者/レーベル名などで横断検索。**パブリックドメイン・CC0・CC-BY・CC-BY-SA の音源だけ**を返し(CC-BY-NC・CC-BY-ND 等は除外)、見つかれば即時ストリーミング可能な音声ファイルの直接 URL(`stream_url`)も付ける。`{"results":[{identifier,title,creator,date,licenseurl,item_url,stream_url}]}` |
-| `GET /healthz` | 死活確認 |
+| `Search/Search` `{q, hl, gl, n}` | 検索。`hl` は言語(ja, zh-TW, ar, fa …)、`gl` は地域(省略可)。`{"results":[{title,link,snippet,engines,score}],"warnings":[]}` |
+| `Search/Engines` `{}` | 検索元の設定と最近の状態 |
+| `Search/Health` `{}` | 使える検索元の状態 |
+| `Admin/SelfCheck` `{}` | 点検と自動保守を今すぐ実行(`x-admin-token`。`ARUARU_SEARCH_ADMIN_TOKEN` 設定時のみ) |
+| `Search/MediaSearch` `{q, n}` | [archive.org](https://archive.org)を曲名/演奏者/作曲者/レーベル名などで横断検索。**パブリックドメイン・CC0・CC-BY・CC-BY-SA の音源だけ**を返し、即時ストリーミング可能な URL(`stream_url`)も付ける。`{"results":[{identifier,title,creator,date,licenseurl,item_url,stream_url}]}` |
+| `GET /healthz` | 死活確認(例外として REST のまま) |
+
+**移行期限つきの互換(新規利用は不可)**: `GET /v1/search`・`POST /v1/search`・`GET /v1/media-search` は、`aruaru-llm`・`open-english`・`open-upstream-watch` が使っているため残している。各呼び出し側を Connect へ移したら削除する。
 
 環境変数: `ARUARU_SEARCH_ARCHIVE_REPO`(設定と保守履歴の保存先の GitHub 非公開リポジトリ。任意)、`ARUARU_SEARCH_BIND`(既定 `127.0.0.1:4610`)、`ARUARU_SEARCH_DATA_DIR`(既定 `data`)、
 `ARUARU_LLM_URL`(既定 `http://127.0.0.1:4600`)、`ARUARU_SEARCH_ADMIN_TOKEN`。
@@ -47,7 +51,7 @@ curl 'http://127.0.0.1:4610/v1/search?q=%E5%B1%B1%E6%A2%A8%E7%9C%8C+%E6%B8%A9%E6
   ヘッダが無い呼び出し(VPS 内の aruaru-llm・realdata.pro)は内部の利用として制限しない(`ARUARU_SEARCH_LOCAL_UNLIMITED=0` で制限)。
   公開するときは、プロキシがクライアントの IP を必ず付け直すこと。
 - **検索元のブロックの見張り**: 拒否(429・403・503・確認ページ)されたら休み、続くほど長く休む(20分 → 1時間 → 3時間 → 12時間 → 24時間)。
-  成功すれば最初に戻る。状態は `/v1/health` と `/v1/engines` で見られ、拒否はログに出る。
+  成功すれば最初に戻る。状態は `Search/Health` と `Search/Engines` で見られ、拒否はログに出る。
 
 ## 曲名/演奏者/作曲者の横断検索(archive.org、`/v1/media-search`)
 

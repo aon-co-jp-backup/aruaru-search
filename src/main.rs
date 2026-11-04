@@ -11,6 +11,7 @@
 //! 毎朝7時(日本時間)と起動時に、全ての検索元を点検し、読み取れなくなったものは AI(aruaru-llm)で自動保守する。
 
 mod archive;
+mod connect;
 mod archive_org;
 mod engine;
 mod lang;
@@ -35,13 +36,13 @@ use search::Searcher;
 
 const INDEX_HTML: &str = include_str!("../web_index.html");
 
-struct Ctx {
-    searcher: Arc<Searcher>,
-    http: reqwest::Client,
-    llm_base: String,
-    dir: PathBuf,
-    admin_token: Option<String>,
-    limiter: limit::Limiter,
+pub struct Ctx {
+    pub searcher: Arc<Searcher>,
+    pub http: reqwest::Client,
+    pub llm_base: String,
+    pub dir: PathBuf,
+    pub admin_token: Option<String>,
+    pub limiter: limit::Limiter,
 }
 
 fn pct_decode(s: &str) -> String {
@@ -78,7 +79,7 @@ fn bad(status: StatusCode, msg: &str) -> Response {
 }
 
 /// プロキシが付けるヘッダから、利用者の IP を取り出す(無ければ内部の利用)。
-fn client_of(req: &Request) -> Option<String> {
+pub fn client_of(req: &Request) -> Option<String> {
     let h = |k: &str| req.headers().get(k).and_then(|v| v.to_str().ok());
     limit::client_key(h("x-forwarded-for"), h("x-real-ip"))
 }
@@ -115,11 +116,9 @@ async fn do_search(
 fn app(ctx: Arc<Ctx>) -> Route {
     let c1 = ctx.clone();
     let c2 = ctx.clone();
-    let c3 = ctx.clone();
-    let c4 = ctx.clone();
-    let c5 = ctx.clone();
+    let connect_ctx = ctx.clone();
     let c6 = ctx.clone();
-    Route::new()
+    let route = Route::new()
         .at(
             "/",
             get(handler_fn(|_r, _p| async {
@@ -176,13 +175,6 @@ fn app(ctx: Arc<Ctx>) -> Route {
             })),
         )
         .at(
-            "/v1/health",
-            get(handler_fn(move |_r, _p| {
-                let ctx = c5.clone();
-                async move { json_response(StatusCode::OK, &ctx.searcher.health()) }
-            })),
-        )
-        .at(
             "/v1/media-search",
             get(handler_fn(move |req: Request, _p| {
                 let ctx = c6.clone();
@@ -205,52 +197,8 @@ fn app(ctx: Arc<Ctx>) -> Route {
                     }
                 }
             })),
-        )
-        .at(
-            "/v1/engines",
-            get(handler_fn(move |_r, _p| {
-                let ctx = c3.clone();
-                async move {
-                    let engines = ctx
-                        .searcher
-                        .engines
-                        .read()
-                        .map(|e| e.clone())
-                        .unwrap_or_default();
-                    let status = ctx
-                        .searcher
-                        .status
-                        .read()
-                        .map(|s| s.clone())
-                        .unwrap_or_default();
-                    json_response(
-                        StatusCode::OK,
-                        &json!({ "engines": engines, "status": status }),
-                    )
-                }
-            })),
-        )
-        .at(
-            "/admin/selfcheck",
-            post(handler_fn(move |req: Request, _p| {
-                let ctx = c4.clone();
-                async move {
-                    let given = req
-                        .headers()
-                        .get("x-admin-token")
-                        .and_then(|v| v.to_str().ok())
-                        .unwrap_or("");
-                    match &ctx.admin_token {
-                        Some(t) if !t.is_empty() && t == given => {}
-                        _ => return bad(StatusCode::FORBIDDEN, "管理トークンが必要です"),
-                    }
-                    let report =
-                        maintain::selfcheck(&ctx.searcher, &ctx.http, &ctx.llm_base, &ctx.dir)
-                            .await;
-                    json_response(StatusCode::OK, &json!({ "report": report }))
-                }
-            })),
-        )
+        );
+    connect::routes(route, connect_ctx)
         .docs_auto("/api", "aruaru-search", env!("CARGO_PKG_VERSION"))
         .with_compression()
 }

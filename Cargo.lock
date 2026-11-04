@@ -125,6 +125,7 @@ dependencies = [
  "http-body-util",
  "open-runo-poem-compat",
  "reqwest",
+ "rust-json",
  "scraper",
  "serde",
  "serde_json",
@@ -3201,6 +3202,16 @@ dependencies = [
  "rand 0.10.3",
  "rcgen 0.14.10",
  "zfs_accel_hlsl",
+]
+
+[[package]]
+name = "rust-json"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sonic-rs 0.3.17",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

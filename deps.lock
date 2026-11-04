@@ -5,3 +5,4 @@ open-web-server https://github.com/aon-co-jp/open-web-server.git 759e625745c43fc
 open-raid-z     https://github.com/aon-co-jp/open-raid-z.git     3ebe82ca6c51579019f77625d686a84aa58917a0
 RS-SmartTCP     https://github.com/aon-co-jp/RS-SmartTCP.git     e60612e64a57f4e870ca0e8aa56f13485858d7c7
 open-cpu        https://github.com/aon-co-jp/open-cpu.git        1ac7b45a635d105dd7177c7f14e1db6f91966eb3
+RS-JSON         https://github.com/aon-co-jp/RS-JSON.git         057bded762911e8a4dcbccc3d06240074305bea5
