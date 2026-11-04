@@ -294,7 +294,7 @@ pub fn load_engines(dir: &Path) -> Vec<EngineDef> {
 async fn ask_ai(http: &reqwest::Client, llm_base: &str, prompt: &str) -> Result<String> {
     let resp = http
         .post(format!(
-            "{}/v1/chat-providers/complete-priority",
+            "{}/aruaru_llm.v1.Llm/ChatProvidersCompletePriority",
             llm_base.trim_end_matches('/')
         ))
         .json(&serde_json::json!({ "prompt": prompt }))

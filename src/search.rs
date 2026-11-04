@@ -61,7 +61,7 @@ pub struct Searcher {
     last_call: Mutex<HashMap<String, Instant>>,
     /// 拒否(429・202・403 など)された検索元を、しばらく休ませる時刻
     cooldown: Mutex<HashMap<String, (Instant, u32)>>,
-    /// 意味による並べ替えに使う aruaru-llm の URL(`/v1/rerank`)。None なら使わない
+    /// 意味による並べ替えに使う aruaru-llm の URL(Connect の `Rerank`)。None なら使わない
     rerank_base: RwLock<Option<String>>,
     /// 保存先(GitHub の非公開リポジトリ。設定と保守履歴。任意)
     pub store: RwLock<Option<Arc<crate::store::Store>>>,
@@ -397,7 +397,7 @@ impl Searcher {
         let call = async {
             let resp = self
                 .http
-                .post(format!("{}/v1/rerank", base.trim_end_matches('/')))
+                .post(format!("{}/aruaru_llm.v1.Llm/Rerank", base.trim_end_matches('/')))
                 .json(&serde_json::json!({ "query": q, "documents": docs }))
                 .timeout(RERANK_TIMEOUT)
                 .send()
