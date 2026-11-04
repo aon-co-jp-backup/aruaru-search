@@ -144,10 +144,9 @@ pub async fn search(q: &str, n: usize) -> Result<Vec<MediaHit>> {
     if !resp.status().is_success() {
         bail!("archive.org が拒否しました(HTTP {})", resp.status());
     }
-    let body: SearchResponse = resp
-        .json()
-        .await
-        .context("archive.org の応答を読み取れません")?;
+    let text = resp.text().await.context("archive.org の応答を読み取れません")?;
+    let body: SearchResponse = rust_json::secure::from_str_secure(&text, &rust_json::secure::Limits { max_bytes: 16 << 20, ..Default::default() })
+        .map_err(|e| anyhow::anyhow!("archive.org の応答を読み取れません: {e}"))?;
     let mut hits: Vec<MediaHit> = Vec::new();
     for d in body.response.docs {
         if d.identifier.is_empty() {
@@ -205,10 +204,9 @@ pub async fn stream_url_for(http: &reqwest::Client, identifier: &str) -> Result<
     if !resp.status().is_success() {
         bail!("メタデータの取得に失敗しました(HTTP {})", resp.status());
     }
-    let meta: MetadataResponse = resp
-        .json()
-        .await
-        .context("archive.org のメタデータを読み取れません")?;
+    let text = resp.text().await.context("archive.org のメタデータを読み取れません")?;
+    let meta: MetadataResponse = rust_json::secure::from_str_secure(&text, &rust_json::secure::Limits { max_bytes: 16 << 20, ..Default::default() })
+        .map_err(|e| anyhow::anyhow!("archive.org のメタデータを読み取れません: {e}"))?;
     let pick = |fmt_contains: &str| {
         meta.files
             .iter()

@@ -302,7 +302,9 @@ async fn ask_ai(http: &reqwest::Client, llm_base: &str, prompt: &str) -> Result<
         .send()
         .await
         .with_context(|| format!("aruaru-llm({llm_base})に接続できません"))?;
-    let j: Json = resp.json().await.context("aruaru-llm の応答を読めません")?;
+    let body = resp.text().await.context("aruaru-llm の応答を読めません")?;
+    let j: Json = rust_json::secure::from_str_secure(&body, &rust_json::secure::Limits { max_bytes: 4 << 20, ..Default::default() })
+        .map_err(|e| anyhow!("aruaru-llm の応答を読めません: {e}"))?;
     j.get("reply")
         .and_then(|r| r.get("text"))
         .and_then(Json::as_str)

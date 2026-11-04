@@ -279,7 +279,10 @@ fn json_str<'a>(v: &'a serde_json::Value, key: &str) -> &'a str {
 
 /// 公式の公開 API(JSON)の応答から、検索結果を取り出す。形が想定と違えば空(=「読み取れず」)にする。
 fn parse_api(kind: &str, body: &str) -> Vec<Hit> {
-    let Ok(v) = serde_json::from_str::<serde_json::Value>(body) else {
+    let Ok(v) = rust_json::secure::from_str_secure::<serde_json::Value>(
+        body,
+        &rust_json::secure::Limits { max_bytes: 4 << 20, ..Default::default() },
+    ) else {
         return Vec::new();
     };
     let mut out: Vec<Hit> = Vec::new();

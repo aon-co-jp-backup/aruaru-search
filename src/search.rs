@@ -405,7 +405,9 @@ impl Searcher {
             if !resp.status().is_success() {
                 bail!("HTTP {}", resp.status().as_u16());
             }
-            let j: serde_json::Value = resp.json().await?;
+            let body = resp.text().await?;
+            let j: serde_json::Value = rust_json::secure::from_str_secure(&body, &rust_json::secure::Limits { max_bytes: 4 << 20, ..Default::default() })
+                .map_err(|e| anyhow::anyhow!("応答を読めません: {e}"))?;
             let scores: Vec<f64> = j
                 .get("scores")
                 .and_then(|s| s.as_array())
