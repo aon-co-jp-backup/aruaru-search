@@ -19,4 +19,4 @@ futures = "0.3"
 scraper = "0.20"
 http-body-util = "0.1"
 bytes = "1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "gzip", "brotli", "cookies"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "gzip", "brotli", "cookies"] }
