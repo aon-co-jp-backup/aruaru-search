@@ -41,3 +41,4 @@
 - 新設 `src/connect.rs`（`aruaru_search.v1.Search/{Search,MediaSearch,Engines,Health}`, `Admin/SelfCheck`）。JSON は RS-JSON（`from_str_secure`、64KiB・深さ・重複キー上限、`rust_json::fast`）。`deps.lock` に RS-JSON を追加。`/v1/health`・`/v1/engines`・`/admin/selfcheck` は削除。`/v1/search`・`/v1/media-search` は呼び出し側（aruaru-llm `web_search.rs`、open-english `news_qa.rs`、open-upstream-watch `services.rs`）の移行まで互換で残す（移行後に削除）。画面は Connect 呼び出しへ。
 - Added `src/connect.rs` (Connect unary API); removed `/v1/health`, `/v1/engines`, `/admin/selfcheck`; `/v1/search` and `/v1/media-search` stay as time-limited compat until the three callers migrate. UI now calls Connect.
 - **デプロイ注意**: VPS 反映で `/v1/health` 等を叩く監視があれば `Search/Health` へ。
+- 追記(同日): 呼び出し側3つ(aruaru-llm / open-english / open-upstream-watch)をConnectへ移し、`/v1/search`・`/v1/media-search`も削除。**デプロイ順: 先にaruaru-search、その後に呼び出し側**。

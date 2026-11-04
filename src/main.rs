@@ -1,11 +1,8 @@
 //! aruaru-search: Rust 製の自前メタ検索。APIキー不要・VPS で完全無料。
 //!
 //! RPoem(`open-runo-poem-compat`)の上で JSON の検索 API を提供する。
-//! - `GET /v1/search?q=...&hl=ja&gl=JP&n=10`(`POST /v1/search` に JSON も可)
-//! - `GET /v1/engines`(検索元の設定と、最近の状態)
-//! - `GET /v1/media-search?q=...&n=10`(archive.org を曲名/演奏者/作曲者で横断検索。
-//!   パブリックドメイン・CC0・CC-BY(-SA)の音源だけを、即時ストリーミング可能な URL 付きで返す)
-//! - `POST /admin/selfcheck`(`x-admin-token` が必要。環境変数 `ARUARU_SEARCH_ADMIN_TOKEN` を設定したときだけ有効)
+//! Connect(`POST /aruaru_search.v1.<Service>/<Method>`、JSON)で提供する。詳細は `connect.rs`。
+//! - `Search/Search`・`Search/MediaSearch`・`Search/Engines`・`Search/Health`・`Admin/SelfCheck`
 //! - `GET /healthz`
 //!
 //! 毎朝7時(日本時間)と起動時に、全ての検索元を点検し、読み取れなくなったものは AI(aruaru-llm)で自動保守する。
@@ -25,10 +22,9 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use http_body_util::{BodyExt, Limited};
 use open_runo_poem_compat::hyper_compat::{html_response, json_response};
 use open_runo_poem_compat::{
-    get, handler_fn, post, Request, Response, Route, Server, StatusCode, TcpListener,
+    get, handler_fn, Request, Route, Server, StatusCode, TcpListener,
 };
 use serde_json::json;
 
@@ -45,79 +41,13 @@ pub struct Ctx {
     pub limiter: limit::Limiter,
 }
 
-fn pct_decode(s: &str) -> String {
-    let b = s.as_bytes();
-    let mut out = Vec::with_capacity(b.len());
-    let mut i = 0;
-    while i < b.len() {
-        match b[i] {
-            b'+' => out.push(b' '),
-            b'%' if i + 2 < b.len() => {
-                if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
-                    out.push(v);
-                    i += 2;
-                } else {
-                    out.push(b'%');
-                }
-            }
-            c => out.push(c),
-        }
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
-fn query_param(query: &str, key: &str) -> Option<String> {
-    query.split('&').find_map(|kv| {
-        let (k, v) = kv.split_once('=')?;
-        (k == key).then(|| pct_decode(v))
-    })
-}
-
-fn bad(status: StatusCode, msg: &str) -> Response {
-    json_response(status, &json!({ "error": msg }))
-}
-
-/// プロキシが付けるヘッダから、利用者の IP を取り出す(無ければ内部の利用)。
 pub fn client_of(req: &Request) -> Option<String> {
     let h = |k: &str| req.headers().get(k).and_then(|v| v.to_str().ok());
     limit::client_key(h("x-forwarded-for"), h("x-real-ip"))
 }
 
-async fn do_search(
-    ctx: &Ctx,
-    client: Option<String>,
-    q: &str,
-    hl: &str,
-    gl: &str,
-    n: usize,
-) -> Response {
-    if let Err(wait) = ctx.limiter.check(client.as_deref(), search::now_unix()) {
-        return json_response(
-            StatusCode::TOO_MANY_REQUESTS,
-            &json!({ "error": format!("利用回数の上限に達しました。{wait}秒後にもう一度お試しください"), "retry_after": wait }),
-        );
-    }
-    let ok_tag = |s: &str, max: usize| {
-        s.len() <= max && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
-    };
-    if !ok_tag(hl, 12) || !ok_tag(gl, 6) {
-        return bad(StatusCode::BAD_REQUEST, "hl / gl が正しくありません");
-    }
-    match ctx.searcher.search(q, hl, gl, n).await {
-        Ok((results, warnings)) => json_response(
-            StatusCode::OK,
-            &json!({ "results": results, "warnings": warnings }),
-        ),
-        Err(e) => bad(StatusCode::BAD_GATEWAY, &format!("{e:#}")),
-    }
-}
-
 fn app(ctx: Arc<Ctx>) -> Route {
-    let c1 = ctx.clone();
-    let c2 = ctx.clone();
     let connect_ctx = ctx.clone();
-    let c6 = ctx.clone();
     let route = Route::new()
         .at(
             "/",
@@ -129,73 +59,6 @@ fn app(ctx: Arc<Ctx>) -> Route {
             "/healthz",
             get(handler_fn(|_r, _p| async {
                 json_response(StatusCode::OK, &json!({ "ok": true }))
-            })),
-        )
-        .at(
-            "/v1/search",
-            get(handler_fn(move |req: Request, _p| {
-                let ctx = c1.clone();
-                async move {
-                    let client = client_of(&req);
-                    let qs = req.uri().query().unwrap_or("").to_string();
-                    let q = query_param(&qs, "q").unwrap_or_default();
-                    let hl = query_param(&qs, "hl").unwrap_or_default();
-                    let gl = query_param(&qs, "gl").unwrap_or_default();
-                    let n = query_param(&qs, "n")
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or(10);
-                    do_search(&ctx, client, &q, &hl, &gl, n).await
-                }
-            }))
-            .post(handler_fn(move |req: Request, _p| {
-                let ctx = c2.clone();
-                async move {
-                    let client = client_of(&req);
-                    let Ok(body) = Limited::new(req.into_body(), 64 << 10).collect().await else {
-                        return bad(StatusCode::PAYLOAD_TOO_LARGE, "リクエストが大きすぎます");
-                    };
-                    let Ok(j) = serde_json::from_slice::<serde_json::Value>(&body.to_bytes())
-                    else {
-                        return bad(StatusCode::BAD_REQUEST, "JSON が正しくありません");
-                    };
-                    let s = |k: &str| j.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let n = j
-                        .get("max_results")
-                        .or_else(|| j.get("n"))
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(10) as usize;
-                    // aruaru-llm の /v1/search/raw と同じ項目名(query / hl / gl / max_results)も受け付ける
-                    let q = if s("q").is_empty() {
-                        s("query")
-                    } else {
-                        s("q")
-                    };
-                    do_search(&ctx, client, &q, &s("hl"), &s("gl"), n).await
-                }
-            })),
-        )
-        .at(
-            "/v1/media-search",
-            get(handler_fn(move |req: Request, _p| {
-                let ctx = c6.clone();
-                async move {
-                    let client = client_of(&req);
-                    if let Err(wait) = ctx.limiter.check(client.as_deref(), search::now_unix()) {
-                        return json_response(
-                            StatusCode::TOO_MANY_REQUESTS,
-                            &json!({ "error": format!("利用回数の上限に達しました。{wait}秒後にもう一度お試しください"), "retry_after": wait }),
-                        );
-                    }
-                    let qs = req.uri().query().unwrap_or("").to_string();
-                    let q = query_param(&qs, "q").unwrap_or_default();
-                    let n = query_param(&qs, "n")
-                        .and_then(|v| v.parse().ok())
-                        .unwrap_or(10);
-                    match archive_org::search(&q, n).await {
-                        Ok(hits) => json_response(StatusCode::OK, &json!({ "results": hits })),
-                        Err(e) => bad(StatusCode::BAD_GATEWAY, &format!("{e:#}")),
-                    }
-                }
             })),
         );
     connect::routes(route, connect_ctx)
@@ -290,16 +153,6 @@ async fn main() -> std::io::Result<()> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn query_string_decoding() {
-        assert_eq!(
-            query_param("q=%E5%B1%B1%E6%A2%A8+%E6%B8%A9%E6%B3%89&hl=ja", "q").as_deref(),
-            Some("山梨 温泉")
-        );
-        assert_eq!(query_param("q=a&hl=ja", "hl").as_deref(), Some("ja"));
-        assert_eq!(query_param("q=a", "zz"), None);
-        assert_eq!(pct_decode("100%"), "100%");
-    }
 
     #[test]
     fn jst_day_boundary_is_at_9_utc() {
