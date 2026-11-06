@@ -141,7 +141,7 @@ async fn main() -> std::io::Result<()> {
     });
     tokio::spawn(schedule(ctx.clone()));
     let (addr, handle) = Server::new(TcpListener::bind(bind)).run(app(ctx)).await?;
-    println!("aruaru-search: http://{addr}/ で待受中(GET /v1/search?q=...)");
+    println!("aruaru-search: http://{addr}/ で待受中(Connect: POST /aruaru_search.v1.Search/Search)");
     tokio::select! {
         _ = handle => {}
         _ = tokio::signal::ctrl_c() => println!("aruaru-search: 終了します"),

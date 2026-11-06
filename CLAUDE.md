@@ -24,7 +24,7 @@ Rust 製の自前メタ検索(APIキー不要)。aruaru-llm の検索の第一�
 Bing・Brave・Yahoo! JAPAN の3つしかなかった日本語検索元に、実ページでセレクタを
 検証した上で **エキサイト ウェブ検索**(`websearch.excite.co.jp`、id=`excite`)を追加した
 (`engines.default.json`・`src/engine.rs`)。robots.txt で検索結果ページ自体は禁止されて
-いないことを確認済み。VPS で実機確認済み(`/v1/health` で `excite` が healthy、実クエリの
+いないことを確認済み。VPS で実機確認済み(`Search/Health` で `excite` が healthy、実クエリの
 結果にも混ざることを確認)。
 
 **この回で調べて見送った候補**(理由つき。次に探すときに同じ道を通らないための記録):
@@ -75,17 +75,17 @@ Bing・Brave・Yahoo! JAPAN の3つしかなかった日本語検索元に、実
   (`give_up_streak_disables_after_threshold_and_resets_on_recovery`など)で、しきい値未満では
   無効化しないこと・しきい値到達で無効化されること・回復で streak が0に戻ることを確認済み。
 
-## archive.org 横断検索(`/v1/media-search`、2026-09-27 実装・実機確認済み)
+## archive.org 横断検索(Connect `Search/MediaSearch`、2026-09-27 実装・実機確認済み)
 
 曲名・演奏者・作曲者・レーベル名で archive.org を検索し、パブリックドメイン・CC0・CC-BY・
 CC-BY-SA の音源だけを即時ストリーミング可能な形(`stream_url`)で返す新エンドポイント。
 既存の `engine.rs`(HTML 解析前提)には混ぜず、`src/archive_org.rs` に専用モジュールとして
 実装した(archive.org は構造化 JSON API を持つため)。ライセンスの絞り込みは
 `is_allowed_license()` でこちら側が厳密に行う(archive.org 自体は CC-BY-NC 等の非商用限定
-音源も検索結果に含むため)。実機で `curl 'http://127.0.0.1:4610/v1/media-search?q=Caruso&n=5'`
+音源も検索結果に含むため)。実機で `curl -XPOST -H 'content-type: application/json' -d '{"q":"Caruso","n":5}' http://127.0.0.1:4610/aruaru_search.v1.Search/MediaSearch`
 を確認し、Enrico Caruso のパブリックドメイン録音がストリーミング URL 付きで返ることを確認済み。
 
-- **未実施**: VPS へのデプロイ・本番反映(ローカルの実機確認のみ)。`open-bar`/`open-music-llm`
+- VPS へ反映済み(2026-11-05、Connect 版 `38d6e3a`)。aruaru-llm の `Llm/MediaSearch` 経由でも実機確認済み。`open-bar`/`open-music-llm`
   等、実際に音源を再生・利用する側からこの API を呼ぶ導線はまだ無い。
 - **未実施**: 大量アクセス時の archive.org 側への配慮(現状は個別の HTTP リクエストのみで、
   既存の検索元のような間隔調整・拒否時の休止は archive.org 向けには実装していない。
