@@ -40,11 +40,18 @@ fn fail(code: &str, message: &str) -> Response {
 }
 
 fn ok(value: &impl Serialize) -> Response {
+    // RS-JSON の `to_vec` が書き出したバイト列をそのまま返す(以前は serde_json::Value に
+    // 読み戻して書き直していた二重の変換をやめた)
     match rust_json::fast::to_vec(value) {
-        Ok(b) => match serde_json::from_slice::<serde_json::Value>(&b) {
-            Ok(v) => json_response(StatusCode::OK, &v),
-            Err(_) => fail("internal", "serialize failed"),
-        },
+        Ok(b) => {
+            let mut resp = Response::new(open_runo_poem_compat::hyper_compat::fixed_body(
+                bytes::Bytes::from(b),
+            ));
+            if let Ok(v) = "application/json; charset=utf-8".parse() {
+                resp.headers_mut().insert("content-type", v);
+            }
+            resp
+        }
         Err(_) => fail("internal", "serialize failed"),
     }
 }
@@ -188,4 +195,29 @@ pub fn routes(route: Route, ctx: Arc<Ctx>) -> Route {
                 }
             })),
         )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn ok_writes_json_bytes_directly_with_json_content_type() {
+        let resp = ok(&serde_json::json!({ "results": [{"title": "東京"}], "warnings": [] }));
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get("content-type").and_then(|v| v.to_str().ok()),
+            Some("application/json; charset=utf-8")
+        );
+        let body = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["results"][0]["title"], "東京");
+    }
+
+    #[tokio::test]
+    async fn fail_maps_codes_to_http_status() {
+        assert_eq!(fail("invalid_argument", "x").status(), StatusCode::BAD_REQUEST);
+        assert_eq!(fail("resource_exhausted", "x").status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(fail("unavailable", "x").status(), StatusCode::BAD_GATEWAY);
+    }
 }
