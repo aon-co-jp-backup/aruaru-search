@@ -140,6 +140,14 @@ async fn main() -> std::io::Result<()> {
         limiter: limit::Limiter::from_env(),
     });
     tokio::spawn(schedule(ctx.clone()));
+    // 休止中の検索元を、時刻が来たら探って自動で復帰させる(成功なら即復帰、失敗なら指数バックオフ)
+    let s2 = ctx.searcher.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            s2.probe_due(None).await;
+        }
+    });
     let (addr, handle) = Server::new(TcpListener::bind(bind)).run(app(ctx)).await?;
     println!("aruaru-search: http://{addr}/ で待受中(Connect: POST /aruaru_search.v1.Search/Search)");
     tokio::select! {

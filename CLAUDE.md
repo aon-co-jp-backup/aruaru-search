@@ -271,3 +271,27 @@ Reading into `serde_json::Value` gives almost no speed-up even with SIMD (188 ms
 
 ## Connect 移行の反映状況(2026-11-05)
 VPS の aruaru-search は Connect 版(`38d6e3a`)。旧RESTは削除済み。呼び出し元(aruaru-llm・open-upstream-watch・realdata.pro・`diet_crawl.py`)も Connect(POST、RS-JSON)。`/healthz` は例外として残す。外部から来る JSON は `from_str_secure` で読む。
+
+## 休止からの自動再開(2026-11-06)
+
+**背景**: bing は91分・brave は111分など(`blocked_level` 2)休止したまま戻らず、aruaru-jobs の求人検索が「free search unavailable」になった。
+休止は「拒否されたら一定時間(20分→1時間→3時間→12時間→24時間)使わない」だけで、**相手が復帰したかを確かめる手段が無く、満了を待つだけ**だった。
+
+**従来の休止ロジック(調査結果、`src/search.rs`)**
+| 契機 | 休止 | 段階の上限 |
+|---|---|---|
+| HTTP 202 / 403 / 429 / 503、API の 400 | `COOLDOWN_STEPS`(20分〜24時間) | 4 |
+| 人かどうかの確認画面 | 同上 | 4 |
+| 検索語の一部しか反映されない結果(ソフトブロック) | 同上 | 2(最長3時間) |
+| 接続失敗・タイムアウト | **休止しない**(毎回失敗を待つ) | - |
+成功すると段階は 0 に戻る。休止中の `fetch_page` は即座に失敗を返す。時刻は `Instant`(試験で差し替え不可)。
+
+**新しい仕組み**
+- **休止の理由を区別**(`BlockKind`): `rejected`(拒否、従来の長い段階)/ `rate_limited`(429、5分〜3時間)/ `network`(接続失敗・タイムアウト・500/502/504、30秒〜10分)。
+- **探りの検索**(`probe_engine`): 休止中の検索元へ、固定の無害な語 `wikipedia`(`PROBE_QUERY`。秘密も利用者の検索語も含まない)を投げ、結果を読み取れれば**即復帰**(休止を解き、段階を1つ下げて残す)。
+  失敗なら指数バックオフ(基本間隔×2^失敗回数。拒否 10分→2時間、429 5分→30分、ネットワーク 20秒→2分が上限)。**探りの失敗で休止の期限は延ばさない**(拒否を深めない)。次の探りは休止の満了時刻を超えない。
+- **定期実行**: `main.rs` が10秒ごとに `probe_due(None)` を呼ぶ(時刻が来た休止中の検索元だけ探る)。
+- **素早い切り替え**: 検索で言語向けの検索元がすべて休止中なら、探りの時刻が来たものを今すぐ探り(最大25秒)、それでも駄目なら言語を限らない他の有効な検索元へ広げる。
+- **時計の差し替え**: `Searcher::with_clock`。休止の時刻はすべて UNIX 秒で、試験は偽の時計と手元の模擬サーバーで検証する。
+- **応答**: `Search/Health` の各検索元に `cooldown_reason`・`next_probe_unix`・`next_probe_secs`・`probe_failures`・`last_probe`(`unix`/`ok`/`error`)を追加。`Search/Engines` の `status` にも同名の項目が出る。既存の項目は不変。
+- **約束**: 確認画面の突破はしない。探りは休止中の検索元にだけ、少ない回数で行う。

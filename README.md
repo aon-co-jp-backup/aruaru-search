@@ -73,6 +73,12 @@ archive.org は構造化された JSON の検索 API(`advancedsearch.php`)とメ
   Enrico Caruso のパブリックドメイン録音(1908〜1919年、`publicdomain/mark`)が
   ストリーミング URL 付きで返ることを確認済み(2026-09-27)。
 
+## 休止からの自動再開
+
+検索元が拒否・混雑・ネットワーク障害で休止しても、**時刻が来ると固定の無害な語で探りの検索を投げ、成功すれば休止の途中でも即復帰**します
+(失敗なら指数バックオフ、休止の理由=拒否/429/ネットワークで長さを変えます)。`POST /aruaru_search.v1.Search/Health` の各検索元に
+`cooldown_reason`・`next_probe_secs`・`last_probe` が出ます。詳細は `CLAUDE.md`。
+
 ## 注意
 
 - 各検索元の利用規約と `robots.txt` の範囲で、個人・研究・小規模な用途を想定しています。大量の自動取得には使わないでください。

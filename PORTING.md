@@ -45,3 +45,9 @@
 
 - 追記(2026-11-05): **VPS 反映済み**(`38d6e3a`)。呼び出し元の洗い出しの結果、未移行だった realdata.pro(`schema.rs` の `/v1/health` → `Search/Health`)と `audiocafe-tokyo-rust` の `diet_crawl.py`(`/v1/search` → `Search/Search`)も Connect(POST、RS-JSON)へ。aruaru-llm への呼び出しは `Llm/Rerank`・`Llm/ChatProvidersCompletePriority`。外部から来る JSON(archive.org・検索元API・aruaru-llm の応答)は `from_str_secure` で読む。
 - Added (2026-11-05): deployed to the VPS (`38d6e3a`); remaining callers (realdata.pro health, diet_crawl.py) moved to Connect (POST, RS-JSON); external JSON is read with `from_str_secure`.
+
+## 2026-11-06 休止からの自動再開 / Auto-resume from cooldown
+- 実装は `src/search.rs`(`BlockKind`・`probe_engine`・`probe_due`・`Searcher::with_clock`)と `src/main.rs`(10秒ごとの探り)。設計・従来ロジックの調査結果は `CLAUDE.md`「休止からの自動再開」。
+- 試験: `cargo test`(偽の時計+手元の模擬サーバーで、即復帰・指数バックオフ・理由の区別・別の検索元への切り替え)。
+- 本番反映: Ubuntu-24.04(WSL、glibc 2.39)でリリースビルド → scp → `.bak-日付` を残して入れ替え → `systemctl restart aruaru-search` → `Search/Health` で確認。VPS ではビルドしない(メモリ 3.6GB)。
+- English: cooled-down engines are now probed with a fixed harmless query when due; success recovers immediately, failure backs off exponentially (cooldown end is never extended). Reasons (rejected / rate_limited / network) get different cooldown lengths. `Health` shows `cooldown_reason`, `next_probe_secs`, `last_probe`.
