@@ -1,8 +1,8 @@
 # aruaru-search が依存する aon-co-jp の兄弟リポジトリ(コミット固定)。
 # 名前 URL コミット
-RPoem           https://github.com/aon-co-jp/RPoem.git           5291d751979a3fd9fb46e117f93f7ba5d12147bc
-open-web-server https://github.com/aon-co-jp/open-web-server.git d5f590e9bf33ecb1f199cade4c4783227c6ca355
+RPoem           https://github.com/aon-co-jp/RPoem.git           48d0badd94d949e13640cee31d64acd32774b8d8
+open-web-server https://github.com/aon-co-jp/open-web-server.git 27dcd7cc4e1c6be2780bb0c16fe1cc809db977ad
 open-raid-z     https://github.com/aon-co-jp/open-raid-z.git     3ebe82ca6c51579019f77625d686a84aa58917a0
 RS-SmartTCP     https://github.com/aon-co-jp/RS-SmartTCP.git     e60612e64a57f4e870ca0e8aa56f13485858d7c7
 open-cpu        https://github.com/aon-co-jp/open-cpu.git        1ac7b45a635d105dd7177c7f14e1db6f91966eb3
-RS-JSON         https://github.com/aon-co-jp/RS-JSON.git         057bded762911e8a4dcbccc3d06240074305bea5
+RS-JSON         https://github.com/aon-co-jp/RS-JSON.git         291195fa9cde71be965108f4dbd74945c6a3662f
