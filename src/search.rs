@@ -669,6 +669,7 @@ impl Searcher {
             let resp = self
                 .http
                 .post(format!("{}/aruaru_llm.v1.Llm/Rerank", base.trim_end_matches('/')))
+                .header("x-tenant", "aruaru-search")
                 .json(&serde_json::json!({ "query": q, "documents": docs }))
                 .timeout(RERANK_TIMEOUT)
                 .send()

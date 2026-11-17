@@ -297,6 +297,7 @@ async fn ask_ai(http: &reqwest::Client, llm_base: &str, prompt: &str) -> Result<
             "{}/aruaru_llm.v1.Llm/ChatProvidersCompletePriority",
             llm_base.trim_end_matches('/')
         ))
+        .header("x-tenant", "aruaru-search")
         .json(&serde_json::json!({ "prompt": prompt }))
         .timeout(Duration::from_secs(150))
         .send()
