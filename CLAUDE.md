@@ -295,3 +295,7 @@ VPS の aruaru-search は Connect 版(`38d6e3a`)。旧RESTは削除済み。呼�
 - **時計の差し替え**: `Searcher::with_clock`。休止の時刻はすべて UNIX 秒で、試験は偽の時計と手元の模擬サーバーで検証する。
 - **応答**: `Search/Health` の各検索元に `cooldown_reason`・`next_probe_unix`・`next_probe_secs`・`probe_failures`・`last_probe`(`unix`/`ok`/`error`)を追加。`Search/Engines` の `status` にも同名の項目が出る。既存の項目は不変。
 - **約束**: 確認画面の突破はしない。探りは休止中の検索元にだけ、少ない回数で行う。
+
+## 2026-11-20 低VRAM・VRAM無し端末(VPS・PC・タブレット・スマホ)でのAI/LLMのノウハウ / Low-VRAM AI know-how
+日本語: AI・LLMを使う機能(推論・要約・補完・OCR等)は、[aruaru-llm/docs/LOW-VRAM-KNOWHOW.md](https://github.com/aon-co-jp/aruaru-llm/blob/main/docs/LOW-VRAM-KNOWHOW.md) に従う: 短い文脈・上限・タイムアウト、VPSで重い推論を直接回さない、メモリが足りなければ小さいモデルへ自動で下げる。広い桁(FP64以上)は本番で使わず、試験の正解にだけ使う。
+English: Features that use AI/LLMs follow the file above: short context, caps and timeouts, no heavy inference directly on the VPS, auto-downgrade to a smaller model when memory is short. Wide floats (FP64 and above) are for test oracles only, not production.
